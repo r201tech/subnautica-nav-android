@@ -50,7 +50,9 @@ public class MainActivity extends Activity implements Shizuku.OnRequestPermissio
 
     private MapView mapView;
     private TextView statusText;
+    private TextView szState;
     private TextView tipText;
+    private Button authBtn;
     private Button refreshBtn;
     private Button slotBtn;
 
@@ -71,8 +73,32 @@ public class MainActivity extends Activity implements Shizuku.OnRequestPermissio
         heading = prefs.getFloat("heading", Float.NaN);
         setContentView(buildUi());
         Shizuku.addRequestPermissionResultListener(this);
+        refreshState();
+        ui.postDelayed(this::refreshState, 2500);
         loadMapAsync();
         ui.postDelayed(this::onRefreshClicked, 800);
+    }
+
+    /** 把 Shizuku 服务/授权状态直接写在界面上，方便一眼定位卡在哪 */
+    private void refreshState() {
+        if (szState == null) return;
+        String s;
+        boolean granted = false;
+        try {
+            if (!Shizuku.pingBinder()) {
+                s = "Shizuku 服务：未连接 → 先打开 Shizuku（首页要显示“服务运行中”）";
+            } else {
+                granted = Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED;
+                s = granted
+                        ? "Shizuku 服务：已连接 · 已授权（uid " + Shizuku.getUid() + "）"
+                        : "Shizuku 服务：已连接 · 未授权 → 点右边「授权」";
+            }
+        } catch (Throwable t) {
+            s = "Shizuku 状态异常：" + t.getClass().getSimpleName() + " " + t.getMessage();
+        }
+        szState.setText(s);
+        szState.setTextColor(granted ? 0xFF7FE9FF : 0xFFFF7A7A);
+        if (authBtn != null) authBtn.setVisibility(granted ? View.GONE : View.VISIBLE);
     }
 
     @Override
@@ -139,6 +165,13 @@ public class MainActivity extends Activity implements Shizuku.OnRequestPermissio
         statusText.setText("正在读取存档…");
         panel.addView(statusText);
 
+        szState = new TextView(this);
+        szState.setTextColor(0xFFFF7A7A);
+        szState.setTextSize(10);
+        szState.setPadding(0, dp(3), 0, 0);
+        szState.setText("Shizuku 服务：检测中…");
+        panel.addView(szState);
+
         tipText = new TextView(this);
         tipText.setTextColor(0x88FFFFFF);
         tipText.setTextSize(10);
@@ -154,6 +187,20 @@ public class MainActivity extends Activity implements Shizuku.OnRequestPermissio
 
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
+
+        authBtn = new Button(this);
+        authBtn.setText("授权");
+        authBtn.setTextSize(12);
+        authBtn.setAllCaps(false);
+        authBtn.setTextColor(0xFFFFFFFF);
+        GradientDrawable authBg = new GradientDrawable();
+        authBg.setColor(0xFFE0533D);
+        authBg.setCornerRadius(dp(14));
+        authBtn.setBackground(authBg);
+        authBtn.setOnClickListener(v -> requestShizuku());
+        LinearLayout.LayoutParams lp0 = new LinearLayout.LayoutParams(dp(72), dp(48));
+        lp0.setMargins(0, 0, dp(10), 0);
+        row.addView(authBtn, lp0);
 
         slotBtn = new Button(this);
         slotBtn.setText("选择存档");
@@ -240,7 +287,7 @@ public class MainActivity extends Activity implements Shizuku.OnRequestPermissio
                     if (!Float.isNaN(heading)) mapView.setHeading(heading);
                 });
             } catch (Throwable t) {
-                ui.post(() -> status("没找到底图：请把 map.png 放到 /storage/emulated/0/DeepSeaNav/ 或编进 assets"));
+                ui.post(() -> status("底图加载失败：" + t.getMessage()));
             }
         }, "map-loader").start();
     }
@@ -265,6 +312,32 @@ public class MainActivity extends Activity implements Shizuku.OnRequestPermissio
         return null;
     }
 
+    /** 「授权」按钮：显式发起一次 Shizuku 授权申请 */
+    private void requestShizuku() {
+        refreshState();
+        try {
+            if (!Shizuku.pingBinder()) {
+                status("Shizuku 服务未连接：先把 Shizuku 打开（首页显示“服务运行中”）再点授权");
+                return;
+            }
+            if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
+                status("已经授权过了");
+                refreshState();
+                return;
+            }
+            status("正在向 Shizuku 申请授权…");
+            int ver = Shizuku.getVersion();
+            try {
+                Shizuku.requestPermission(SHIZUKU_REQ);
+            } catch (Throwable t) {
+                status("申请失败（Shizuku v" + ver + "）：" + t.getMessage()
+                        + " → 到 Shizuku「授权应用」里手动打开本应用");
+            }
+        } catch (Throwable t) {
+            status("Shizuku 调用异常：" + t.getMessage());
+        }
+    }
+
     private void onRefreshClicked() {
         if (busy) return;
         if (!Shizuku.pingBinder()) {
@@ -281,6 +354,7 @@ public class MainActivity extends Activity implements Shizuku.OnRequestPermissio
             status("Shizuku 状态异常：" + t.getMessage());
             return;
         }
+        refreshState();
         busy = true;
         refreshBtn.setEnabled(false);
         status("正在读取存档…");
@@ -290,6 +364,7 @@ public class MainActivity extends Activity implements Shizuku.OnRequestPermissio
     @Override
     public void onRequestPermissionResult(int requestCode, int grantResult) {
         if (requestCode != SHIZUKU_REQ) return;
+        ui.post(this::refreshState);
         if (grantResult == PackageManager.PERMISSION_GRANTED) {
             ui.post(this::onRefreshClicked);
         } else {
@@ -352,6 +427,7 @@ public class MainActivity extends Activity implements Shizuku.OnRequestPermissio
             List<String> slots = parseSlots(out);
             if (slots.isEmpty()) continue;
             if (!chosenSlot.isEmpty() && slots.contains(chosenSlot)) return chosenSlot;
+            // 默认取最新修改的那个
             String newest = null;
             long newestTs = -1;
             for (String s : slots) {
