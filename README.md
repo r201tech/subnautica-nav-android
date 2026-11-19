@@ -2,8 +2,6 @@
 
 《深海迷航》(Subnautica) 安卓手游的**存档定位**工具：把存档里的玩家世界坐标解析出来，叠加到地图上显示“你在哪”。不依赖 root，靠 **Shizuku** 授予的 shell(ADB) 权限读 `/sdcard/Android/data`。
 
-![界面](docs/screenshot.png)
-
 ## 功能
 
 - 点「更新地图」重新读一次存档 → 重画一次位置（位置来自存档，不是实时内存）
@@ -20,7 +18,7 @@
 ## 原理（三段）
 
 1. **取文件**：Shizuku 反射调用 `Shizuku.newProcess()` 起一个 `sh -c "cat …/scene-objects.bin"`，拿到原始字节。
-2. **解坐标**：存档是“一个 varint 长度前缀 + 一串 protobuf 对象记录”。定位到名字为 `Player` 的记录，在其内部找 `UnityEngine.Transform` 组件，位置就藏在 `0x0a 0x15 "UnityEngine.Transform" 0x10 0x01` 之后：`0x0f` 标记 + 15 字节 = 3 个带 tag 的 float（x / y / z）。
+2. **解坐标**：存档是“一个 varint 长度前缀 + 一串 protobuf 对象记录”。定位到名字为 `Player` 的记录，在其内部找 `UnityEngine.Transform` 组件，位置就藏在 `0a 15 "UnityEngine.Transform" 10 01` 之后：`0f` 标记 + 15 字节 = 3 个带 tag 的 float（x / y / z）。
 3. **贴图**：地图按 `x∈[-2000,2000] → 横向`，`z∈[2000,-2000] → 纵向`（北在上）线性映射成像素点。
 
 详细字段与逐字节结构见 [docs/存档格式.md](docs/存档格式.md)。
@@ -29,7 +27,7 @@
 
 1. 手机装 [Shizuku](https://shizuku.rikosage.dev/)，用「无线调试」方式启动（Android 11+），或用 root 启动。
 2. 装本 App，打开，点「更新地图」→ 弹 Shizuku 授权 → 允许。
-3. 进游戏→设置里**手动保存**一次 → 回 App 点「更新地图」。
+3. 进游戏 → 设置里**手动保存**一次 → 回 App 点「更新地图」。
 
 > 位置是**存档那一刻**的，不是实时位置；想刷新就在游戏里手动存一次。手游自动存档（打开 PDA 触发、可设 2.5 分钟）也算。
 
@@ -42,6 +40,8 @@ echo "sdk.dir=/你的/android/sdk" > local.properties
 gradle assembleDebug   # 产物 app/build/outputs/apk/debug/app-debug.apk
 ```
 
+也带了 GitHub Actions（`.github/workflows/build.yml`），push 后自动编译并把 APK 传成 artifact。
+
 ## 底图说明（重要）
 
 仓库**不附带**任何地图图片。App 支持把你自己准备的地图放到：
@@ -51,7 +51,7 @@ gradle assembleDebug   # 产物 app/build/outputs/apk/debug/app-debug.apk
 /storage/emulated/0/深海导航/map.png
 ```
 
-要求：正方形、坐标范围 -2000~2000 全覆盖（例如常见的 KT411 中文全图）。也可以放到 `app/src/main/assets/subnautica_map.png` 一起编进 APK。
+要求：正方形、坐标范围 -2000~2000 全覆盖。也可以放到 `app/src/main/assets/subnautica_map.png` 一起编进 APK。
 
 ## 已知限制
 
