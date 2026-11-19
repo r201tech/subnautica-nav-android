@@ -2,10 +2,22 @@
 
 《深海迷航》(Subnautica) 安卓手游的**存档定位**工具：把存档里的玩家世界坐标解析出来，叠加到地图上显示“你在哪”。不依赖 root，靠 **Shizuku** 授予的 shell(ADB) 权限读 `/sdcard/Android/data`。
 
+当前版本：**v1.4**（versionCode 5）
+
 ## 成品下载
 
-- v1.3 debug APK：<https://aka.doubaocdn.com/s/UFWGbiMoAY> （约 4.9 MB，debug 签名，直接安装）
+- v1.4 APK：<https://aka.doubaocdn.com/s/Rsp2m9k5RY> （约 4.9 MB，debug 签名）
 - 源码自行编译见下方“编译”；每次 push 也会自动出 APK（Actions → Artifacts）
+
+## 版本记录
+
+| 版本 | 内容 |
+| --- | --- |
+| v1.0 | 更新地图按钮、读存档、坐标与深度 |
+| v1.1 | 选择存档、朝向三角（长按设定） |
+| v1.2 | 黄色提示：更新前先在游戏内手动存档 |
+| v1.3 | 右上角 GitHub 图标按钮、外置底图优先 |
+| **v1.4** | **新增 Shizuku 状态行（未连接/未授权/已授权 uid）+ 「授权」按钮**，一键重试授权 |
 
 ## 功能
 
@@ -27,12 +39,12 @@
 2. **解坐标**：存档是“一个 varint 长度前缀 + 一串 protobuf 对象记录”。定位到名字为 `Player` 的记录，在其内部找 `UnityEngine.Transform` 组件，位置藏在 `0a 15 "UnityEngine.Transform" 10 01` 之后：`0f` 标记 + 15 字节 = 3 个带 tag 的 float（x / y / z）。
 3. **贴图**：地图按 `x∈[-2000,2000] → 横向`，`z∈[2000,-2000] → 纵向`（北在上）线性映射成像素点。
 
-详细字段与逐字节结构见 [docs/存档格式.md](docs/存档格式.md)；注意事项（为什么要手动存档、底图怎么放、已知坑）见 [docs/注意事项.md](docs/注意事项.md)。
+详细字段与逐字节结构见 [docs/存档格式.md](docs/存档格式.md)；权限体系差异、为什么要手动存档、底图怎么放、已知坑见 [docs/注意事项.md](docs/注意事项.md)。
 
 ## 使用
 
-1. 手机装 [Shizuku](https://shizuku.rikosage.dev/)，用「无线调试」方式启动（Android 11+），或用 root 启动。
-2. 装本 App，打开，点「更新地图」→ 弹 Shizuku 授权 → 允许。
+1. 手机装 Shizuku（或用 Porter / Stellar 等兼容服务）。
+2. 装本 App，打开，看状态行：未连接→先去开服务；未授权→点「授权」；已授权（uid 2000）→点「更新地图」。
 3. 进游戏 → 设置里**手动保存**一次 → 回 App 点「更新地图」。
 
 > 位置是**存档那一刻**的，不是实时位置；想刷新就在游戏里手动存一次。手游自动存档（打开 PDA 触发、可设 2.5 分钟）也算。
@@ -46,20 +58,27 @@ echo "sdk.dir=/你的/android/sdk" > local.properties
 gradle assembleDebug   # 产物 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-也带了 GitHub Actions（`.github/workflows/build.yml`），push 后自动编译并把 APK 传成 artifact。
-
 ## 目录结构
 
 ```
 app/src/main/java/com/doubao/subnauticanav/
-├─ MainActivity.java   # 界面、Shizuku 授权、选存档、刷图
+├─ MainActivity.java   # 界面、Shizuku 状态与授权、选存档、刷图
 ├─ MapView.java        # 自绘地图：缩放/拖动/长按定朝向/红点与三角
-└─ SaveParser.java     # scene-objects.bin → 玩家坐标
+└─ SaveParser.java     # scene-objects.bin 转玩家坐标
 ```
+
+## 权限框架兼容性
+
+| 服务 | 授权表现 |
+| --- | --- |
+| 原版 Shizuku / Porter | 首次弹授权弹窗，可在授权列表里撤销 |
+| Stellar 兼容层 | **只在第 1 次弹授权确认，之后不再弹，也不进「授权应用」列表，无法在 UI 内撤销**（Stellar 侧自述此行为仅在其测试环境验证、未大范围测试）；要收回权限就关掉兼容层或停止服务 |
+
+细节见 [docs/注意事项.md](docs/注意事项.md)。
 
 ## 底图说明（重要）
 
-仓库**不附带**任何地图图片。App 支持把你自己准备的地图放到：
+仓库**不附带**任何地图图片（版权归原作者）。请把你自己的底图放到：
 
 ```
 /storage/emulated/0/DeepSeaNav/map.png      # 推荐
@@ -73,7 +92,7 @@ app/src/main/java/com/doubao/subnauticanav/
 - 只适用于包名为 `com.unknownworlds.subnautica` 的手游移植版，路径写死 `files/SavedGames`（兼容旧版 `SNAppData/SavedGames`）。
 - 存档里**没有玩家朝向**（Player 的 Transform 旋转是单位四元数），所以朝向只能手动指定。
 - 坐标系按 ±2000 线性铺满整图，若底图带边距需要自行微调映射。
-- Shizuku 重启后需重新启动（无线调试方式），除非用 root 启动。
+- 覆盖安装新 APK 后旧授权会失效，需重新授权一次。
 
 ## 免责
 
