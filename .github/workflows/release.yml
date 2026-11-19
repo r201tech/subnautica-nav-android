@@ -1,0 +1,50 @@
+name: release
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.7'
+
+      - name: 读取版本号
+        id: v
+        run: |
+          V=$(grep -oP 'versionName\s+"\K[^"]+' app/build.gradle)
+          echo "name=$V" >> $GITHUB_OUTPUT
+          echo "versionName = $V"
+
+      - name: 编译 debug APK
+        run: |
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+          gradle --no-daemon assembleDebug
+          cp app/build/outputs/apk/debug/app-debug.apk deepseanav-v${{ steps.v.outputs.name }}.apk
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.v.outputs.name }}
+          name: 深海导航 v${{ steps.v.outputs.name }}
+          body: |
+            自动构建的 debug 签名 APK，下载后直接安装。
+
+            使用前先装 Shizuku（或兼容服务）并授权；地图图片不随包分发，请自行放到 `/storage/emulated/0/DeepSeaNav/map.png`。
+          files: deepseanav-v${{ steps.v.outputs.name }}.apk
+          draft: false
+          prerelease: false

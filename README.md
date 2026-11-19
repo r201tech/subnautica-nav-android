@@ -4,10 +4,10 @@
 
 当前版本：**v1.4**（versionCode 5）
 
-## 成品下载
+## 下载
 
-- v1.4 APK：<https://aka.doubaocdn.com/s/Rsp2m9k5RY> （约 4.9 MB，debug 签名）
-- 源码自行编译见下方“编译”；每次 push 也会自动出 APK（Actions → Artifacts）
+- **APK 发布页（推荐）**：[Releases](https://github.com/r201tech/subnautica-nav-android/releases) ——push 后由 GitHub Actions 自动编译并挂到发行版，下载链接永久有效
+- 源码自行编译见下方“编译”；每次 push 也会出构建产物（Actions → Artifacts）
 
 ## 版本记录
 
@@ -17,7 +17,7 @@
 | v1.1 | 选择存档、朝向三角（长按设定） |
 | v1.2 | 黄色提示：更新前先在游戏内手动存档 |
 | v1.3 | 右上角 GitHub 图标按钮、外置底图优先 |
-| **v1.4** | **新增 Shizuku 状态行（未连接/未授权/已授权 uid）+ 「授权」按钮**，一键重试授权 |
+| **v1.4** | 新增 Shizuku 状态行（未连接/未授权/已授权 uid）+ 「授权」按钮 |
 
 ## 功能
 
@@ -36,7 +36,7 @@
 ## 原理（三段）
 
 1. **取文件**：Shizuku 反射调用 `Shizuku.newProcess()` 起一个 `sh -c "cat …/scene-objects.bin"`，拿到原始字节。
-2. **解坐标**：存档是“一个 varint 长度前缀 + 一串 protobuf 对象记录”。定位到名字为 `Player` 的记录，在其内部找 `UnityEngine.Transform` 组件，位置藏在 `0a 15 "UnityEngine.Transform" 10 01` 之后：`0f` 标记 + 15 字节 = 3 个带 tag 的 float（x / y / z）。
+2. **解坐标**：存档是“一个 varint 长度前缀 + 一串 protobuf 对象记录”。定位到名字为 `Player` 的记录，在其内部找 `UnityEngine.Transform` 组件，位置就藏在 `0a 15 "UnityEngine.Transform" 10 01` 之后：`0f` 标记 + 15 字节 = 3 个带 tag 的 float（x / y / z）。
 3. **贴图**：地图按 `x∈[-2000,2000] → 横向`，`z∈[2000,-2000] → 纵向`（北在上）线性映射成像素点。
 
 详细字段与逐字节结构见 [docs/存档格式.md](docs/存档格式.md)；权限体系差异、为什么要手动存档、底图怎么放、已知坑见 [docs/注意事项.md](docs/注意事项.md)。
@@ -72,7 +72,7 @@ app/src/main/java/com/doubao/subnauticanav/
 | 服务 | 授权表现 |
 | --- | --- |
 | 原版 Shizuku / Porter | 首次弹授权弹窗，可在授权列表里撤销 |
-| Stellar 兼容层 | **只在第 1 次弹授权确认，之后不再弹，也不进「授权应用」列表，无法在 UI 内撤销**（Stellar 侧自述此行为仅在其测试环境验证、未大范围测试）；要收回权限就关掉兼容层或停止服务 |
+| Stellar 兼容层 | 只在第 1 次弹授权确认，之后不再弹，也不进「授权应用」列表，无法在 UI 内撤销；要收回权限就关掉兼容层或停服务 |
 
 细节见 [docs/注意事项.md](docs/注意事项.md)。
 
